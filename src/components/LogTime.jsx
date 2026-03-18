@@ -36,26 +36,46 @@ export default function LogTime() {
     return () => window.removeEventListener('online', attemptSync);
   }, []);
 
-  const attemptSync = async () => {
+const attemptSync = async () => {
     const offlineQueue = JSON.parse(localStorage.getItem('haazimi_offline_logs') || '[]');
     if (offlineQueue.length === 0) return;
 
-    for (let i = 0; i < offlineQueue.length; i++) {
+    // We use a copy to avoid glitches during the loop
+    const newQueue = [...offlineQueue];
+
+    for (let i = 0; i < newQueue.length; i++) {
       try {
+        const log = newQueue[i];
+        
+        // This is the "Magic Map" - it ensures Google gets exactly what it needs
+        const payload = {
+          date: log.date,
+          activity: log.activity,
+          hours: log.hours,
+          checkIn: log.checkIn,
+          checkOut: log.checkOut,
+          notes: log.notes,
+          studentCount: log.studentCount,
+          otherActivity: log.otherActivity
+        };
+
         await fetch(GOOGLE_SCRIPT_URL, {
           method: "POST",
           mode: "no-cors",
-          body: JSON.stringify(offlineQueue[i])
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload) // We send the mapped payload, not the raw log
         });
-        // Success: Remove from queue
-        offlineQueue.splice(i, 1);
-        i--;
+
+        // If we reach here, it's a success! Remove from queue
+        newQueue.splice(i, 1);
+        i--; 
       } catch (err) {
-        console.log("Still offline, keeping data safe in storage.");
-        break; // Stop loop if network is truly down
+        console.log("Sync failed, keeping data in storage for next attempt.");
+        break; 
       }
     }
-    localStorage.setItem('haazimi_offline_logs', JSON.stringify(offlineQueue));
+    // Update the storage with whatever is left
+    localStorage.setItem('haazimi_offline_logs', JSON.stringify(newQueue));
   };
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
