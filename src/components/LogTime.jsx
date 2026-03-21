@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { TIME_LOGS as INITIAL_LOGS } from '../data/mockData';
 
 // --- CONFIGURATION ---
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxON3JkEXF9BuRQOKUAI-cu-fdn7XBitCrDzxY9a84yKmO97zQtkddlsqxT6kZ5eIOR/exec";
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxBy_7djs7R1rYzvb4kRZ-A2lAwQx6_IncNhUxoh70ID_ibjYJ7mEwYdJ0LAAgumVc_/exec";
 const TEACHING_ACTIVITIES = ['Teaching', 'Teaching + Admin'];
 
 function activityLabel(log) {
