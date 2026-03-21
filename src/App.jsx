@@ -16,7 +16,7 @@ import Settings from './components/Settings';
 import { USERS } from './data/mockData';
 
 // 1. PASTE YOUR GOOGLE SCRIPT URL HERE
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/YOUR_ACTUAL_ID_HERE/exec";
+const GOOGLE_SCRIPT_URL = https://script.google.com/macros/s/AKfycbw3kLcZu7y1AoUtThJbkpUiTSdZM1qke4Yuq-7IsXKCJ91LtjW3mshFGQj0z62WUO8l/exec;
 
 const VIEWS = {
   dashboard: Dashboard,
