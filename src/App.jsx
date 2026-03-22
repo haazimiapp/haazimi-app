@@ -58,23 +58,22 @@ export default function App() {
   }, [language]);
 
   // 3. NEW REGISTRATION LOGIC
-  const handleRegister = async (name, email, password) => {
+const handleRegister = async (name, email, password) => {
     const users = JSON.parse(localStorage.getItem('haazimi_accounts') || '[]');
     
     if (users.find(u => u.email === email)) {
       return { success: false, message: "Email already registered on this device." };
     }
 
-    // Save user locally
     const newUser = { name, email, password, role: 'Teacher' };
     users.push(newUser);
     localStorage.setItem('haazimi_accounts', JSON.stringify(users));
 
-    // Send only the profile to Google Sheets (no passwords!)
     try {
-      await fetch(GOOGLE_SCRIPT_URL, {
+      await fetch("https://script.google.com/macros/s/AKfycbw3kLcZu7y1AoUtThJbkpUiTSdZM1qke4Yuq-7IsXKCJ91LtjW3mshFGQj0z62WUO8l/exec", {
         method: "POST",
         mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "register",
           name: name,
@@ -82,7 +81,7 @@ export default function App() {
           role: "Teacher"
         })
       });
-    } catch(e) { console.log("Offline registration"); }
+    } catch(e) { console.log("Sync error", e); }
 
     return { success: true };
   };
