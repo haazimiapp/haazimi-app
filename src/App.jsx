@@ -14,9 +14,7 @@ import PeopleToVisit from './components/PeopleToVisit';
 import Budget from './components/Budget';
 import Settings from './components/Settings';
 import { USERS } from './data/mockData';
-
-// 1. PASTE YOUR GOOGLE SCRIPT URL HERE
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw3kLcZu7y1AoUtThJbkpUiTSdZM1qke4Yuq-7IsXKCJ91LtjW3mshFGQj0z62WUO8l/exec";
+import { GOOGLE_SCRIPT_URL } from './data/config'; // Importing from the config file we just made
 
 const VIEWS = {
   dashboard: Dashboard,
@@ -43,7 +41,9 @@ export default function App() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
   const [language, setLanguage] = useState(() => localStorage.getItem('language') || 'en');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  
+  // EDIT HERE: Responsive sidebar - starts collapsed (true) on screens smaller than 1200px
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(window.innerWidth < 1200);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -58,7 +58,7 @@ export default function App() {
   }, [language]);
 
   // 3. NEW REGISTRATION LOGIC
-const handleRegister = async (name, email, password) => {
+  const handleRegister = async (name, email, password) => {
     const users = JSON.parse(localStorage.getItem('haazimi_accounts') || '[]');
     
     if (users.find(u => u.email === email)) {
@@ -70,7 +70,8 @@ const handleRegister = async (name, email, password) => {
     localStorage.setItem('haazimi_accounts', JSON.stringify(users));
 
     try {
-      await fetch("https://script.google.com/macros/s/AKfycbw3kLcZu7y1AoUtThJbkpUiTSdZM1qke4Yuq-7IsXKCJ91LtjW3mshFGQj0z62WUO8l/exec", {
+      // Using the variable GOOGLE_SCRIPT_URL for consistency
+      await fetch(GOOGLE_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "application/json" },
@@ -99,9 +100,9 @@ const handleRegister = async (name, email, password) => {
       // Save session memory so LogTime.jsx knows who this is
       localStorage.setItem('haazimi_user', JSON.stringify({ name: found.name, role: found.role }));
       setUser(found);
-      return true;
+      return { success: true };
     }
-    return false;
+    return { success: false, message: "Invalid email or password." };
   };
 
   // 5. UPDATED LOGOUT & DEV LOGIN
@@ -125,7 +126,7 @@ const handleRegister = async (name, email, password) => {
     return (
       <LoginPage
         onLogin={handleLogin}
-        onRegister={handleRegister} // <-- Added the new prop here
+        onRegister={handleRegister}
         onDevLogin={handleDevLogin}
         theme={theme}
         onToggleTheme={toggleTheme}
