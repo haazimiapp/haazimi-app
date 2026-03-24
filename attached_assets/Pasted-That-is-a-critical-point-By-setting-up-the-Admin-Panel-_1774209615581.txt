@@ -1,0 +1,60 @@
+That is a critical point. By setting up the Admin Panel to be "Role-based" rather than "Name-based," any Dhimmedaar you promote to Admin in the Google Sheet will automatically see the same management tools you do. They’ll be able to approve their own local Saathies and manage their specific centers without you having to lift a finger.
+
+Here is your Ultra-Efficient "One-Shot" Prompt with the link included.
+
+🚀 Copy and Paste this to the Replit Agent (Build Mode):
+Project Goal: Upgrade my React Attendance App to a Cloud-authenticated system.
+
+1. Connection Details:
+
+Google Script URL: https://script.google.com/macros/s/AKfycbw3kLcZu7y1AoUtThJbkpUiTSdZM1qke4Yuq-7IsXKCJ91LtjW3mshFGQj0z62WUO8l/exec
+
+Database Headers (Google Sheets): Timestamp, Name, Email, Password, Role, Country, Centre, Status.
+
+2. Cloud Login & Auth:
+
+Rewrite handleLogin to fetch the user list from the URL via a GET request.
+
+Validation: Access is ONLY granted if:
+
+Email and Password match the Sheet.
+
+Status is exactly "Approved".
+
+Persistent Session: Use localStorage to keep the user logged in once authenticated.
+
+3. Registration Gatekeeper:
+
+Add dependent dropdowns for Country and Centre.
+
+Data: >   * South Africa: ["Ext. 1 (Lenasia)", "Ext. 13 (Lenasia)"]
+
+Venezuela: ["Unare", "El Tigre", "San Jose"]
+
+Argentina: ["Buenos Aires", "Mar Del Plata", "Mendoza", "Quilmes"]
+
+Brazil, Paraguay, Uruguay, Bolivia: [] (Allow Admins to add names via the UI later).
+
+Rules: Password >= 8 chars. Email must be valid. New users are sent to the backend with status: "Pending".
+
+Tip: Add a translated tip under Name: "Name must match your official timesheet exactly." (Translate into EN, AR, UR, ES, PT).
+
+4. Multi-Admin Command Centre (Role: "Admin" Only):
+
+Create a view to list all users.
+
+Any user with the role "Admin" must be able to:
+
+Toggle Status (Approved/Denied) for other users.
+
+Change Role (Teacher/Manager/Admin).
+
+Add new Centre names for their respective countries.
+
+All updates must be sent via POST requests to the URL with type: "updateUser".
+
+5. Leave Request "Pending Lock":
+
+Fetch attendance/leave history. If a user has a "Pending" request, disable the "Request Leave" button and show a status bar + "Cancel Request" option.
+
+Technical Note: Use mode: 'cors' or no-cors as needed for the Google Apps Script. Maintain the existing multilingual translation system.

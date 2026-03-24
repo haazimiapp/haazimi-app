@@ -1,0 +1,55 @@
+Please perform a surgical update on App.jsx, Layout.jsx, Dashboard.jsx, Admin.jsx, and Settings.jsx to fix these specific issues:
+
+1. Mobile UI & Sidebar Logic:
+
+
+
+Auto-Close: In App.jsx, ensure that upon a successful login or navigation on a mobile screen (<= 900px), the mobileSidebarOpen state is immediately set to false. The menu should NOT stay open after logging in.
+
+RTL Calendar Fix: Fix the Calendar.jsx container. In 'ar' (Arabic) or 'ur' (Urdu) modes, ensure the calendar uses flex-direction: row or a standard grid that doesn't break/disappear on mobile.
+
+2. Admin Command Centre (Clutter Reduction):
+
+
+
+Registration First: Move the 'App Registration Requests' to the absolute top of the Admin.jsx view.
+
+Centres Management: Do not show all center details by default. Create a clean, clickable button labeled 'Manage/Edit Centres' that either navigates to a new view or expands a hidden panel to show the center list.
+
+User List: Move the 'User List' from the bottom of the page to its own dedicated tab or a clearly labeled section higher up.
+
+3. Global Settings & Currency:
+
+
+
+Currency Toggle: In Settings.jsx, add a 'Currency Preference' toggle (USD/PKR/etc). Update the app so that all budget/financial values use the selected symbol (default to $). Note: No converter needed, just change the label and ensures calculations use the stored numbers.
+
+Translation Audit: Ensure the translations object is complete for all views. If a translation is missing for a specific language, default to English instead of leaving it blank.
+
+4. Strict Data Permissions (Logic Update):
+
+
+
+Name Lock: Disable the ability for any user to change their own 'Name' in Settings.
+
+Email Rule: Implement a logic check: Users can only change their email address once every 30 days. Store the lastEmailChangeDate in localStorage.
+
+Administrative Overrides: Ensure that 'Branch' and 'Centre' fields are read-only for Teachers. Only 'Admin' and 'Manager' roles should have the dropdowns enabled to change these values for their staff members.
+
+5. Dashboard & AI Fixes:
+
+
+
+Re-verify that the Recent Logs table has a dedicated scroll wrapper.
+
+Ensure the AI Assistant 'Ask' button is fully visible on iPhone-sized screens."
+
+What this fixes for you immediately:
+
+The Login "Wall": By forcing mobileSidebarOpen to false on login, you'll actually see your dashboard immediately instead of a giant menu covering it.
+
+The Budget: It will now default to $ as you requested, with a simple toggle in Settings for when you need to see other symbols.
+
+The Admin Privacy: Your Command Centre won't look like a cluttered spreadsheet; it'll look like a professional dashboard with a "Manage Centres" button.
+
+Security: Users won't be able to "alias" themselves by changing names, and the email limit prevents spamming the system.

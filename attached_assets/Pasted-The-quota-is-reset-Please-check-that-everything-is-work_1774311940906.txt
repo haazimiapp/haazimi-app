@@ -1,0 +1,53 @@
+The quota is reset. Please check that everything is working and perform a full logic and UI synchronization across the entire project (App.jsx, Layout.jsx, Admin.jsx, Dashboard.jsx, Settings.jsx, etc) to implement these features:
+
+1. Reimbursement System (New Component: Reimbursement.jsx):
+
+Location: Add a 'Reimbursement' link in the sidebar under 'Personal' (near 'People to Visit').
+
+Calculator Logic: - Inputs: Distance (km), Fuel Price (per litre), and Efficiency (Dropdown 5km/L to 15km/L).
+
+Toggle: 'Include Wear & Tear' (adds a global rate, default $0.10/km).
+
+Storage: Instead of PDF, save the request to a reimbursements list in localStorage.
+
+Notification: When a request is submitted, a red notification dot or 'New' badge must appear on the 'Command Centre' (for Admin) and 'Management' (for Manager) sidebar links.
+
+2. Third-Party Leave ('Request for Other'):
+
+In LeaveRequest.jsx, add a toggle: 'My Leave' vs 'Request for Staff.'
+
+If 'Request for Staff' is selected, provide a searchable dropdown of all active staff.
+
+Ensure the record stores both the requestor (who filled it) and the beneficiary (the staff member taking leave).
+3. Admin & Manager Audit Trail:
+
+When an Admin/Manager approves or rejects any request (Registration, Leave, or Reimbursement), save their Name, a Timestamp, and a Reason (if rejected).
+
+Show this 'Status Note' to the staff member on their personal dashboard.
+
+4. Strict Data & Currency Rules:
+
+Currency: Set the global default to $. Hide the 'Currency Toggle' from all Teacher/Staff settings; only Admin/Managers can see or change it.
+
+Permissions: Lock 'Name,' 'Branch,' and 'Centre' fields for Teacher-level accounts (Read-Only).
+
+Email Rule: Allow email changes only once every 30 days.
+
+5. UI & Mobile Fixes:
+
+Auto-Close: Ensure the mobile sidebar (<= 900px) closes immediately upon login or navigating to a new view.
+
+Admin Layout: Move 'App Registration Requests' to the absolute top of the Command Centre. Hide the 'Centres' list behind a 'Manage Centres' button.
+
+RTL Calendar: Fix the CSS for the Calendar so it displays correctly on mobile in Arabic/Urdu (RTL) modes."
+
+6. change IMS to Madrassa Haazimi
+
+
+
+Final Success Check (What to look for):
+The Red Dot: After you submit a reimbursement as a Teacher, log in as Admin. You should see a notification badge telling you something needs your attention.
+
+The Calculator: Test the "Fuel Only" vs. "Wear & Tear" toggle to ensure the math changes correctly.
+
+The Sidebar: On the phone view, the menu should "snap" shut as soon as you log in, showing you the Dashboard right away.

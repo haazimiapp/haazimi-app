@@ -1,0 +1,37 @@
+Please perform a complete code restoration and feature update for App.jsx, Layout.jsx, Dashboard.jsx, and LoginPage.jsx.
+
+1. Fix Login & Admin Access (CRITICAL):
+
+Ensure LoginPage.jsx checks both the USERS mock data and haazimi_accounts in localStorage.
+
+Admin Auto-Route: If a user role is 'Admin', the app MUST default to the admin view (Command Centre) immediately upon login.
+
+Admin Permissions: The Admin must have access to everything a Manager has (Staff Management, Pending Leaves, Red Flags, Budget, Reports) plus the Command Centre. Update NAV_SECTIONS in Layout.jsx to reflect this.
+
+2. Command Centre (Admin.jsx) - New Features:
+
+App Registration Requests: At the very top of the Command Centre, add a 'Pending Registrations' section. This should list any new users who signed up but haven't been 'Approved' yet (mock this using a list from localStorage).
+
+Bird's Eye View: Show total students across all centers, active 'Red Flag' alerts from all teachers, and a 'Budget vs. Actual' summary.
+
+3. Sidebar & Mobile UI Polish:
+
+Sidebar: Open by default on desktop, hidden on mobile (width <= 900px).
+
+Table Fix: In Dashboard.jsx, wrap the 'Recent Logs' in a div with overflow-x: auto. Tighten padding so the 'Activity' column doesn't break the layout.
+
+AI Fix: Use flex-wrap on the AI input so the 'Ask' button stays inside the box on small screens.
+
+4. Leave Request & Third-Party Entry:
+
+Update QuickLeaveRequest to include a 'Request for' field (Self or specific Staff name).
+
+Persistence: After submitting, display a 'Pending Requests' list directly under the request bar.
+
+5. Advanced Logic & Sync:
+
+GPS/Location: In the LogTime logic, add a mock 'Location Verified' badge (e.g., a green 'At Centre' indicator).
+
+Offline Sync: Ensure Time Logs save to localStorage before attempting to fetch. Show a 'Syncing...' or 'Last Synced' timestamp in the sidebar footer.
+
+Global Language: Create a translations object and ensure the language state updates all Sidebar links and Dashboard headers (e.g., 'Assalamu Alaikum' should change based on the selected language)."
