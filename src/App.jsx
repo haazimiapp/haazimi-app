@@ -73,29 +73,35 @@ export default function App() {
 
   const handleLogin = async (email, password) => {
     try {
+      // 1. Fetch the absolute latest list from the Google Sheet
       const res = await fetch(`${GOOGLE_SCRIPT_URL}?type=getUsers`, { mode: 'cors' });
       const data = await res.json();
       const list = Array.isArray(data) ? data : (data.users || []);
+      
+      // 2. Find the user in the LIVE cloud data
       const found = list.find(
-        u => u.Email?.toLowerCase() === email.toLowerCase() &&
-             u.Password === password &&
-             u.Status === 'Approved'
+        u => u.Email?.toLowerCase() === email.toLowerCase() && 
+             String(u.Password) === String(password)
       );
+
       if (found) {
-        return _doLogin({ name: found.Name, email: found.Email, role: found.Role, country: found.Country, centre: found.Centre });
+        if (found.Status === 'Approved') {
+          return _doLogin({ 
+            name: found.Name, 
+            email: found.Email, 
+            role: found.Role, 
+            country: found.Country, 
+            centre: found.Centre 
+          });
+        } else {
+          return { success: false, message: 'Account pending approval. Please contact an Admin.' };
+        }
       }
-    } catch {}
+    } catch (error) {
+      console.error("Cloud Login Error:", error);
+    }
 
-    try {
-      const localAccounts = JSON.parse(localStorage.getItem('haazimi_accounts') || '[]');
-      const foundLocal = localAccounts.find(
-        u => u.email?.toLowerCase() === email.toLowerCase() && u.password === password
-      );
-      if (foundLocal) {
-        return _doLogin({ name: foundLocal.name, email: foundLocal.email, role: foundLocal.role || 'Teacher', country: foundLocal.country || '', centre: foundLocal.centre || '' });
-      }
-    } catch {}
-
+    // Fallback to Mock Data (Only for development/emergency)
     const foundMock = USERS.find(
       u => u.email?.toLowerCase() === email.toLowerCase() && u.password === password
     );
@@ -109,7 +115,7 @@ export default function App() {
   const _doLogin = (sessionUser) => {
     localStorage.setItem('haazimi_user', JSON.stringify(sessionUser));
     setUser(sessionUser);
-    setMobileSidebarOpen(false); // Auto-close mobile sidebar on login
+    setMobileSidebarOpen(false);
     setCurrentView(sessionUser.role === 'Admin' ? 'admin' : 'dashboard');
     return { success: true };
   };
@@ -120,22 +126,36 @@ export default function App() {
     if (password.length < 8) return { success: false, message: 'Password must be at least 8 characters.' };
 
     try {
-      const accounts = JSON.parse(localStorage.getItem('haazimi_accounts') || '[]');
-      if (!accounts.find(u => u.email?.toLowerCase() === email.toLowerCase())) {
-        accounts.push({ name, email, password, role: 'Teacher', country, centre, status: 'Pending', timestamp: new Date().toISOString() });
-        localStorage.setItem('haazimi_accounts', JSON.stringify(accounts));
+      // 1. Check for duplicates in the Cloud first
+      const res = await fetch(`${GOOGLE_SCRIPT_URL}?type=getUsers`, { mode: 'cors' });
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data.users || []);
+      
+      if (list.find(u => u.Email?.toLowerCase() === email.toLowerCase())) {
+        return { success: false, message: 'This email is already registered in the system.' };
       }
-    } catch {}
 
-    try {
+      // 2. Send to Google Sheet
       await fetch(GOOGLE_SCRIPT_URL, {
-        method: 'POST', mode: 'no-cors',
+        method: 'POST',
+        mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'register', name, email, password, role: 'Teacher', country, centre, status: 'Pending' }),
+        body: JSON.stringify({ 
+          type: 'register', 
+          name, 
+          email, 
+          password, 
+          role: 'Teacher', 
+          country, 
+          centre, 
+          status: 'Pending' 
+        }),
       });
-    } catch {}
 
-    return { success: true };
+      return { success: true, message: 'Registration submitted! Please wait for Admin approval.' };
+    } catch (error) {
+      return { success: false, message: 'Registration failed. Check your internet connection.' };
+    }
   };
 
   const handleLogout = () => {
@@ -154,7 +174,7 @@ export default function App() {
     const sessionUser = devUsers[role] || devUsers.dhimmedaar;
     localStorage.setItem('haazimi_user', JSON.stringify(sessionUser));
     setUser(sessionUser);
-    setMobileSidebarOpen(false); // Auto-close mobile sidebar on login
+    setMobileSidebarOpen(false);
     setCurrentView(role === 'admin' ? 'admin' : 'dashboard');
   };
 
@@ -164,7 +184,7 @@ export default function App() {
 
   const handleNavigate = (view) => {
     setCurrentView(view);
-    setMobileSidebarOpen(false); // Auto-close mobile sidebar on navigation
+    setMobileSidebarOpen(false);
   };
 
   if (!user) {
