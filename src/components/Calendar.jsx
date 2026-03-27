@@ -66,11 +66,17 @@ const T = {
   },
 };
 
-const HIJRI_MONTHS = [
-  'Muharram', 'Safar', "Rabi' al-Awwal", "Rabi' al-Thani",
-  "Jumada al-Awwal", "Jumada al-Thani", 'Rajab', "Sha'ban",
-  'Ramadan', 'Shawwal', "Dhu al-Qi'dah", 'Dhu al-Hijjah'
-];
+const HIJRI_MONTHS_BY_LANG = {
+  en: ['Muharram', 'Safar', "Rabi' al-Awwal", "Rabi' al-Thani",
+    "Jumada al-Awwal", "Jumada al-Thani", 'Rajab', "Sha'ban",
+    'Ramadan', 'Shawwal', "Dhu al-Qi'dah", 'Dhu al-Hijjah'],
+  ar: ['مُحَرَّم', 'صَفَر', 'رَبِيع الأوَّل', 'رَبِيع الثَّاني',
+    'جُمَادَى الأُولَى', 'جُمَادَى الآخِرَة', 'رَجَب', 'شَعْبَان',
+    'رَمَضَان', 'شَوَّال', 'ذُو القَعْدَة', 'ذُو الحِجَّة'],
+  ur: ['محرم', 'صفر', 'ربیع الاول', 'ربیع الثانی',
+    'جمادی الاول', 'جمادی الثانی', 'رجب', 'شعبان',
+    'رمضان', 'شوال', 'ذوالقعدہ', 'ذوالحجہ'],
+};
 
 function gregorianToHijri(gy, gm, gd, offset = 0) {
   const a = Math.floor((14 - gm) / 12);
@@ -91,13 +97,13 @@ function gregorianToHijri(gy, gm, gd, offset = 0) {
   return { year: hy, month: hm, day: hd };
 }
 
-function getHijriHeader(gy, gm, offset) {
+function getHijriHeader(gy, gm, offset, hijriMonths) {
   const firstDay = new Date(gy, gm, 1);
   const lastDay = new Date(gy, gm + 1, 0);
   const h1 = gregorianToHijri(firstDay.getFullYear(), firstDay.getMonth() + 1, firstDay.getDate(), offset);
   const h2 = gregorianToHijri(lastDay.getFullYear(), lastDay.getMonth() + 1, lastDay.getDate(), offset);
-  if (h1.month === h2.month) return `${HIJRI_MONTHS[h1.month - 1]} ${h1.year} AH`;
-  return `${HIJRI_MONTHS[h1.month - 1]} – ${HIJRI_MONTHS[h2.month - 1]} ${h2.year} AH`;
+  if (h1.month === h2.month) return `${hijriMonths[h1.month - 1]} ${h1.year} AH`;
+  return `${hijriMonths[h1.month - 1]} – ${hijriMonths[h2.month - 1]} ${h2.year} AH`;
 }
 
 function getDaysInMonth(year, month) { return new Date(year, month + 1, 0).getDate(); }
@@ -109,6 +115,8 @@ export default function Calendar({ user, language }) {
   const t = T[language] || T.en;
   const MONTHS = MONTHS_BY_LANG[language] || MONTHS_BY_LANG.en;
   const DAYS = DAYS_BY_LANG[language] || DAYS_BY_LANG.en;
+  const HIJRI_MONTHS = HIJRI_MONTHS_BY_LANG[language] || HIJRI_MONTHS_BY_LANG.en;
+  const isRTL = language === 'ar' || language === 'ur';
 
   const EVENT_LABELS = {
     holiday: t.holiday, event: t.event, exam: t.exam,
@@ -159,7 +167,7 @@ export default function Calendar({ user, language }) {
   while (cells.length % 7 !== 0)
     cells.push({ day: nextD++, current: false, gMonth: month === 11 ? 1 : month + 2, gYear: month === 11 ? year + 1 : year });
 
-  const hijriHeader = getHijriHeader(year, month, hijriOffset);
+  const hijriHeader = getHijriHeader(year, month, hijriOffset, HIJRI_MONTHS);
 
   const handleDayEnter = (ev, e) => {
     if (!ev) return;
@@ -195,12 +203,16 @@ export default function Calendar({ user, language }) {
       <div className="calendar-layout">
         <div className="calendar-main">
           <div className="calendar-controls">
-            <button className="calendar-nav-btn" onClick={prevMonth}><ChevronLeft size={20} /></button>
+            <button className="calendar-nav-btn" onClick={prevMonth} aria-label="Previous month">
+              {isRTL ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+            </button>
             <div className="calendar-title-block">
               <h3 className="calendar-title">{MONTHS[month]} {year}</h3>
               <div className="calendar-hijri-subtitle">{hijriHeader}</div>
             </div>
-            <button className="calendar-nav-btn" onClick={nextMonth}><ChevronRight size={20} /></button>
+            <button className="calendar-nav-btn" onClick={nextMonth} aria-label="Next month">
+              {isRTL ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
+            </button>
           </div>
 
           {!isCurrentMonth && (
