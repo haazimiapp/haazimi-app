@@ -35,6 +35,8 @@ const VIEWS = {
   reimbursement: Reimbursement,
 };
 
+const MANAGER_ONLY_VIEWS = new Set(['pendingleaves', 'staff', 'redflags', 'budget', 'reports', 'admin']);
+
 export default function App() {
   const [user, setUser] = useState(() => {
     try {
@@ -71,98 +73,127 @@ export default function App() {
     localStorage.setItem('language', language);
   }, [language]);
 
-  const handleLogin = async (email, password) => {
-    try {
-      // 1. Fetch the absolute latest list from the Google Sheet
-      const res = await fetch(`${GOOGLE_SCRIPT_URL}?type=getUsers`, { mode: 'cors' });
-      const data = await res.json();
-      const list = Array.isArray(data) ? data : (data.users || []);
-      
-      // 2. Find the user in the LIVE cloud data
-      const found = list.find(
-        u => u.Email?.toLowerCase() === email.toLowerCase() && 
-             String(u.Password) === String(password)
-      );
-
-      if (found) {
-        if (found.Status === 'Approved') {
-          return _doLogin({ 
-            name: found.Name, 
-            email: found.Email, 
-            role: found.Role, 
-            country: found.Country, 
-            centre: found.Centre 
-          });
-        } else {
-          return { success: false, message: 'Account pending approval. Please contact an Admin.' };
-        }
-      }
-    } catch (error) {
-      console.error("Cloud Login Error:", error);
-    }
-
-    // Fallback to Mock Data (Only for development/emergency)
-    const foundMock = USERS.find(
-      u => u.email?.toLowerCase() === email.toLowerCase() && u.password === password
-    );
-    if (foundMock) {
-      return _doLogin({ name: foundMock.name, email: foundMock.email, role: foundMock.role, country: foundMock.center || '', centre: foundMock.center || '' });
-    }
-
-    return { success: false, message: 'Invalid credentials or account not yet approved.' };
-  };
-
-  const _doLogin = (sessionUser) => {
-    localStorage.setItem('haazimi_user', JSON.stringify(sessionUser));
-    setUser(sessionUser);
+  const _doLogin = (sessionUser, isDev = false) => {
+    const userWithTag = { ...sessionUser, isDev };
+    localStorage.setItem('haazimi_user', JSON.stringify(userWithTag));
+    setUser(userWithTag);
     setMobileSidebarOpen(false);
     setCurrentView(sessionUser.role === 'Admin' ? 'admin' : 'dashboard');
     return { success: true };
   };
 
-  const handleRegister = async (name, email, password, country, centre) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) return { success: false, message: 'Please enter a valid email address.' };
-    if (password.length < 8) return { success: false, message: 'Password must be at least 8 characters.' };
+  const handleLogin = async (email, password) => {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    let gsheetsUsers = [];
+    let gsheetsReachable = false;
+    try {
+      const res = await fetch(`${GOOGLE_SCRIPT_URL}?type=getUsers&t=${Date.now()}`, { mode: 'cors' });
+      const data = await res.json();
+      gsheetsUsers = Array.isArray(data) ? data : (data.users || []);
+      gsheetsReachable = true;
+    } catch {}
+
+    if (gsheetsReachable && gsheetsUsers.length > 0) {
+      const gsUser = gsheetsUsers.find((u) => (u.Email || '').toLowerCase() === normalizedEmail);
+      if (gsUser) {
+        if (gsUser.Password !== password) return { success: false, message: 'Incorrect password.' };
+        const status = gsUser.Status || 'Pending';
+        if (status === 'Pending') return { success: false, message: 'Awaiting admin approval.' };
+        if (status === 'Denied') return { success: false, message: 'Registration denied.' };
+        if (status === 'Approved') {
+          return _doLogin({
+            name: gsUser.Name, email: gsUser.Email, role: gsUser.Role,
+            country: gsUser.Country, centre: gsUser.Centre,
+          }, false);
+        }
+      }
+    }
 
     try {
-      // 1. Check for duplicates in the Cloud first
-      const res = await fetch(`${GOOGLE_SCRIPT_URL}?type=getUsers`, { mode: 'cors' });
-      const data = await res.json();
-      const list = Array.isArray(data) ? data : (data.users || []);
-      
-      if (list.find(u => u.Email?.toLowerCase() === email.toLowerCase())) {
-        return { success: false, message: 'This email is already registered in the system.' };
+      const localAccounts = JSON.parse(localStorage.getItem('haazimi_accounts') || '[]');
+      const localUser = localAccounts.find((u) => (u.email || '').toLowerCase() === normalizedEmail);
+      if (localUser) {
+        if (localUser.password !== password) return { success: false, message: 'Incorrect password.' };
+        if (localUser.status === 'Pending') return { success: false, message: 'Awaiting admin approval.' };
+        if (localUser.status === 'Denied') return { success: false, message: 'Registration denied. Contact an admin.' };
+        if (localUser.status === 'Approved') {
+          return _doLogin({
+            name: localUser.name, email: localUser.email, role: localUser.role || 'Teacher',
+            country: localUser.country || '', centre: localUser.centre || '',
+          }, false);
+        }
       }
+    } catch {}
 
-      // 2. Send to Google Sheet
-      await fetch(GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          type: 'register', 
-          name, 
-          email, 
-          password, 
-          role: 'Teacher', 
-          country, 
-          centre, 
-          status: 'Pending' 
-        }),
-      });
-
-      return { success: true, message: 'Registration submitted! Please wait for Admin approval.' };
-    } catch (error) {
-      return { success: false, message: 'Registration failed. Check your internet connection.' };
+    const mockUser = USERS.find((u) => (u.email || '').toLowerCase() === normalizedEmail);
+    if (mockUser) {
+      if (mockUser.password !== password) return { success: false, message: 'Incorrect password.' };
+      return _doLogin({
+        name: mockUser.name, email: mockUser.email, role: mockUser.role,
+        country: mockUser.center || '', centre: mockUser.center || '',
+      }, true);
     }
+
+    return { success: false, message: 'No account found.' };
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('haazimi_user');
-    setUser(null);
-    setMobileSidebarOpen(false);
-    setCurrentView('dashboard');
+  const handleRegister = async (name, email, password, country, centre) => {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    let gsheetsUsers = [];
+    try {
+      const res = await fetch(`${GOOGLE_SCRIPT_URL}?type=getUsers&t=${Date.now()}`, { mode: 'cors' });
+      const data = await res.json();
+      gsheetsUsers = Array.isArray(data) ? data : (data.users || []);
+    } catch {}
+
+    const existingGS = gsheetsUsers.find((u) => (u.Email || '').toLowerCase() === normalizedEmail);
+    if (existingGS) {
+      if (existingGS.Status === 'Approved') return { success: false, message: 'An account with this email already exists. Please sign in.' };
+      if (existingGS.Status === 'Pending') return { success: false, message: 'Your registration is already submitted and pending approval.' };
+      if (existingGS.Status === 'Denied') return { success: false, message: 'Your registration was previously denied. Please contact an admin.' };
+    }
+
+    try {
+      const existing = JSON.parse(localStorage.getItem('haazimi_accounts') || '[]');
+      if (existing.find((u) => (u.email || '').toLowerCase() === normalizedEmail)) {
+        return { success: false, message: 'An account with this email already exists.' };
+      }
+    } catch {}
+
+    const newAccount = {
+      name: name.trim(), email: normalizedEmail, password,
+      role: 'Teacher', country, centre,
+      status: 'Pending', registeredAt: new Date().toISOString(),
+    };
+
+    try {
+      const existing = JSON.parse(localStorage.getItem('haazimi_accounts') || '[]');
+      existing.push(newAccount);
+      localStorage.setItem('haazimi_accounts', JSON.stringify(existing));
+    } catch {}
+
+    try {
+      await fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST', mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'register', ...newAccount }),
+      });
+    } catch {}
+    try {
+      await fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST', mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'updateUser',
+          email: normalizedEmail, name: name.trim(), password,
+          role: 'Teacher', country, centre, status: 'Pending',
+        }),
+      });
+    } catch {}
+
+    return { success: true };
   };
 
   const handleDevLogin = (role) => {
@@ -172,17 +203,24 @@ export default function App() {
       admin: { name: 'Dev Admin', email: 'admin@dev.local', role: 'Admin', country: 'South Africa', centre: 'Ext. 1 (Lenasia)' },
     };
     const sessionUser = devUsers[role] || devUsers.dhimmedaar;
-    localStorage.setItem('haazimi_user', JSON.stringify(sessionUser));
-    setUser(sessionUser);
-    setMobileSidebarOpen(false);
-    setCurrentView(role === 'admin' ? 'admin' : 'dashboard');
+    _doLogin(sessionUser, true);
   };
 
-  const toggleTheme = () => setTheme(t => t === 'light' ? 'dark' : 'light');
-  const toggleSidebar = () => setSidebarCollapsed(c => !c);
-  const toggleMobileSidebar = () => setMobileSidebarOpen(o => !o);
+  const handleLogout = () => {
+    localStorage.removeItem('haazimi_user');
+    setUser(null);
+    setMobileSidebarOpen(false);
+    setCurrentView('dashboard');
+  };
+
+  const toggleTheme = () => setTheme((t) => t === 'light' ? 'dark' : 'light');
+  const toggleSidebar = () => setSidebarCollapsed((c) => !c);
+  const toggleMobileSidebar = () => setMobileSidebarOpen((o) => !o);
+
+  const isManagerOrAdmin = (role) => ['Admin', 'Manager', 'manager'].includes(role);
 
   const handleNavigate = (view) => {
+    if (MANAGER_ONLY_VIEWS.has(view) && !isManagerOrAdmin(user?.role)) return;
     setCurrentView(view);
     setMobileSidebarOpen(false);
   };
@@ -201,12 +239,13 @@ export default function App() {
     );
   }
 
-  const ViewComponent = VIEWS[currentView] || Dashboard;
+  const resolvedView = MANAGER_ONLY_VIEWS.has(currentView) && !isManagerOrAdmin(user?.role) ? 'dashboard' : currentView;
+  const ViewComponent = VIEWS[resolvedView] || Dashboard;
 
   return (
     <Layout
       user={user}
-      currentView={currentView}
+      currentView={resolvedView}
       onNavigate={handleNavigate}
       onLogout={handleLogout}
       theme={theme}
@@ -218,7 +257,12 @@ export default function App() {
       mobileSidebarOpen={mobileSidebarOpen}
       onToggleMobileSidebar={toggleMobileSidebar}
     >
-      <ViewComponent user={user} onNavigate={handleNavigate} language={language} />
+      <ViewComponent
+        user={user}
+        onNavigate={handleNavigate}
+        language={language}
+        isDev={!!user.isDev}
+      />
     </Layout>
   );
 }
