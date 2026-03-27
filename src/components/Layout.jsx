@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Calendar, Users, BookOpen, BarChart2, Clock,
   FileText, CheckSquare, AlertTriangle, MapPin, DollarSign, Settings,
-  Sun, Moon, Globe, Menu, X, ChevronRight, LogOut, Shield, Wifi, WifiOff, Receipt
+  Sun, Moon, Globe, Menu, X, ChevronRight, LogOut, Shield, Wifi, WifiOff, Receipt, Bell
 } from 'lucide-react';
 
 const NAV_LABELS = {
@@ -14,6 +14,9 @@ const NAV_LABELS = {
     main: 'Main', management: 'Management', personal: 'Personal',
     myWork: 'My Work', account: 'Account', adminSection: 'Admin',
     reimbursement: 'Reimbursement',
+    signOut: 'Sign Out', notifications: 'Notifications',
+    noNotifications: 'No new notifications',
+    online: 'Online', synced: 'Synced', offline: 'Offline — data saved locally',
   },
   ar: {
     dashboard: 'لوحة القيادة', calendar: 'التقويم', staff: 'إدارة الموظفين',
@@ -23,6 +26,9 @@ const NAV_LABELS = {
     main: 'رئيسي', management: 'الإدارة', personal: 'شخصي',
     myWork: 'عملي', account: 'الحساب', adminSection: 'مسؤول',
     reimbursement: 'التعويض',
+    signOut: 'تسجيل الخروج', notifications: 'الإشعارات',
+    noNotifications: 'لا توجد إشعارات جديدة',
+    online: 'متصل', synced: 'تمت المزامنة', offline: 'غير متصل — البيانات محفوظة محلياً',
   },
   ur: {
     dashboard: 'ڈیش بورڈ', calendar: 'کیلنڈر', staff: 'عملہ انتظام',
@@ -32,6 +38,9 @@ const NAV_LABELS = {
     main: 'مرکزی', management: 'انتظامیہ', personal: 'ذاتی',
     myWork: 'میرا کام', account: 'اکاؤنٹ', adminSection: 'ایڈمن',
     reimbursement: 'معاوضہ',
+    signOut: 'سائن آؤٹ', notifications: 'اطلاعات',
+    noNotifications: 'کوئی نئی اطلاع نہیں',
+    online: 'آن لائن', synced: 'ہم آہنگ', offline: 'آف لائن — ڈیٹا مقامی طور پر محفوظ',
   },
   es: {
     dashboard: 'Panel', calendar: 'Calendario', staff: 'Personal',
@@ -41,6 +50,9 @@ const NAV_LABELS = {
     main: 'Principal', management: 'Gestión', personal: 'Personal',
     myWork: 'Mi Trabajo', account: 'Cuenta', adminSection: 'Admin',
     reimbursement: 'Reembolso',
+    signOut: 'Cerrar Sesión', notifications: 'Notificaciones',
+    noNotifications: 'No hay notificaciones nuevas',
+    online: 'En línea', synced: 'Sincronizado', offline: 'Sin conexión — datos guardados localmente',
   },
   pt: {
     dashboard: 'Painel', calendar: 'Calendário', staff: 'Funcionários',
@@ -50,6 +62,9 @@ const NAV_LABELS = {
     main: 'Principal', management: 'Gestão', personal: 'Pessoal',
     myWork: 'Meu Trabalho', account: 'Conta', adminSection: 'Admin',
     reimbursement: 'Reembolso',
+    signOut: 'Sair', notifications: 'Notificações',
+    noNotifications: 'Nenhuma notificação nova',
+    online: 'Online', synced: 'Sincronizado', offline: 'Sem conexão — dados salvos localmente',
   },
 };
 
@@ -166,6 +181,7 @@ export default function Layout({
   children
 }) {
   const [langOpen, setLangOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 900);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [lastSynced, setLastSynced] = useState(() => localStorage.getItem('haazimi_last_synced') || null);
@@ -173,6 +189,7 @@ export default function Layout({
     const isAdminOrManager = ['Admin', 'Manager', 'manager'].includes(user?.role);
     return isAdminOrManager && localStorage.getItem('haazimi_reimbursement_notify') === 'true';
   });
+  const [showBottomNav, setShowBottomNav] = useState(() => localStorage.getItem('haazimi_show_bottom_nav') !== 'false');
 
   const lbl = NAV_LABELS[language] || NAV_LABELS.en;
   const sections = buildSections(user.role, lbl, hasReimbNotify);
@@ -204,6 +221,53 @@ export default function Layout({
     }
   }, [currentView]);
 
+  // Listen for settings changes (bottom nav toggle, etc.)
+  useEffect(() => {
+    const handler = (e) => {
+      setShowBottomNav(localStorage.getItem('haazimi_show_bottom_nav') !== 'false');
+    };
+    window.addEventListener('haazimi-settings-changed', handler);
+    return () => window.removeEventListener('haazimi-settings-changed', handler);
+  }, []);
+
+  // Close bell/lang dropdowns on outside click
+  useEffect(() => {
+    const handler = () => { setBellOpen(false); setLangOpen(false); };
+    if (bellOpen || langOpen) {
+      setTimeout(() => document.addEventListener('click', handler), 0);
+      return () => document.removeEventListener('click', handler);
+    }
+  }, [bellOpen, langOpen]);
+
+  // Build notifications list
+  const isAdminOrManager = ['Admin', 'Manager', 'manager'].includes(user?.role);
+  const pendingLocalRegs = (() => {
+    try {
+      const accounts = JSON.parse(localStorage.getItem('haazimi_accounts') || '[]');
+      return accounts.filter(a => !a.status || a.status === 'Pending');
+    } catch { return []; }
+  })();
+  const pendingReimbs = (() => {
+    try {
+      const reimbs = JSON.parse(localStorage.getItem('haazimi_reimbursements') || '[]');
+      return reimbs.filter(r => r.status === 'pending');
+    } catch { return []; }
+  })();
+  const pendingLeaveCount = (() => {
+    if (!isAdminOrManager) return 0;
+    try {
+      const leaves = JSON.parse(localStorage.getItem('haazimi_leaves') || '[]');
+      return leaves.filter(l => String(l.status || '').toLowerCase() === 'pending').length;
+    } catch { return 0; }
+  })();
+  const notifications = [];
+  if (isAdminOrManager) {
+    if (pendingLeaveCount > 0) notifications.push({ text: `${pendingLeaveCount} pending leave request${pendingLeaveCount > 1 ? 's' : ''}`, view: 'pendingleaves', color: '#f59e0b' });
+    if (pendingLocalRegs.length > 0) notifications.push({ text: `${pendingLocalRegs.length} pending registration${pendingLocalRegs.length > 1 ? 's' : ''}`, view: 'admin', color: '#8b5cf6' });
+    if (pendingReimbs.length > 0) notifications.push({ text: `${pendingReimbs.length} reimbursement request${pendingReimbs.length > 1 ? 's' : ''}`, view: 'admin', color: '#3b82f6' });
+  }
+  const notifCount = notifications.length;
+
   const handleToggle = () => {
     if (isMobile) { onToggleMobileSidebar(); } else { onToggleSidebar(); }
   };
@@ -215,7 +279,7 @@ export default function Layout({
   }));
 
   return (
-    <div className={`app-container has-bottom-nav ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${mobileSidebarOpen ? 'mobile-sidebar-open' : ''}`}>
+    <div className={`app-container ${showBottomNav ? 'has-bottom-nav' : ''} ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${mobileSidebarOpen ? 'mobile-sidebar-open' : ''}`}>
       <div className="main-view-overlay" onClick={onToggleMobileSidebar} />
 
       <aside className="sidebar">
@@ -235,12 +299,12 @@ export default function Layout({
         <div className="sidebar-footer">
           <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', textAlign: 'center', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
             {isOnline
-              ? <><Wifi size={12} style={{ color: '#22c55e' }} /><span style={{ color: '#22c55e' }}>Online{lastSynced ? ` · Synced ${lastSynced}` : ''}</span></>
-              : <><WifiOff size={12} style={{ color: '#f59e0b' }} /><span style={{ color: '#f59e0b' }}>Offline — data saved locally</span></>
+              ? <><Wifi size={12} style={{ color: '#22c55e' }} /><span style={{ color: '#22c55e' }}>{lbl.online}{lastSynced ? ` · ${lbl.synced} ${lastSynced}` : ''}</span></>
+              : <><WifiOff size={12} style={{ color: '#f59e0b' }} /><span style={{ color: '#f59e0b' }}>{lbl.offline}</span></>
             }
           </div>
           <button onClick={onLogout} style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
-            <LogOut size={16} /> Sign Out
+            <LogOut size={16} /> {lbl.signOut}
           </button>
         </div>
       </aside>
@@ -257,12 +321,55 @@ export default function Layout({
             </div>
           </div>
           <div className="header-actions">
+            {/* Notification Bell */}
+            <div style={{ position: 'relative' }}>
+              <button
+                className="theme-toggle"
+                onClick={(e) => { e.stopPropagation(); setBellOpen(o => !o); setLangOpen(false); }}
+                style={{ position: 'relative' }}
+                title="Notifications"
+              >
+                <Bell size={22} />
+                {notifCount > 0 && (
+                  <span style={{
+                    position: 'absolute', top: 2, right: 2, width: 16, height: 16,
+                    borderRadius: '50%', background: '#ef4444', color: '#fff',
+                    fontSize: '0.6rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    border: '2px solid var(--main-bg)',
+                  }}>{notifCount}</span>
+                )}
+              </button>
+              {bellOpen && (
+                <div onClick={e => e.stopPropagation()} style={{
+                  position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 200,
+                  background: 'var(--card-bg)', border: '1px solid var(--border-color)',
+                  borderRadius: 10, minWidth: 240, boxShadow: '0 8px 24px var(--shadow-color)',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{ padding: '10px 14px', fontWeight: 600, fontSize: '0.82rem', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-color)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {lbl.notifications}
+                  </div>
+                  {notifications.length === 0 ? (
+                    <div style={{ padding: '16px 14px', color: 'var(--text-secondary)', fontSize: '0.88rem', textAlign: 'center' }}>
+                      {lbl.noNotifications}
+                    </div>
+                  ) : notifications.map((n, i) => (
+                    <button key={i} onClick={() => { onNavigate(n.view); setBellOpen(false); }}
+                      style={{ width: '100%', textAlign: 'left', padding: '11px 14px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--border-color)', color: 'var(--text-primary)', fontSize: '0.88rem' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: n.color, flexShrink: 0 }} />
+                      {n.text}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="language-switcher">
-              <button className="language-switcher-button" onClick={() => setLangOpen(o => !o)}>
+              <button className="language-switcher-button" onClick={(e) => { e.stopPropagation(); setLangOpen(o => !o); setBellOpen(false); }}>
                 <Globe size={22} />
               </button>
               {langOpen && (
-                <div className="language-switcher-dropdown">
+                <div className="language-switcher-dropdown" onClick={e => e.stopPropagation()}>
                   {LANGS.map(l => (
                     <button
                       key={l.code}
@@ -283,18 +390,20 @@ export default function Layout({
 
         <main className="main-content">{children}</main>
 
-        <nav className="bottom-nav-bar">
-          {bottomNavItems.map(item => (
-            <button
-              key={item.view}
-              className={`bottom-nav-item ${currentView === item.view ? 'active' : ''}`}
-              onClick={() => onNavigate(item.view)}
-            >
-              <item.icon size={22} />
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
+        {showBottomNav && (
+          <nav className="bottom-nav-bar">
+            {bottomNavItems.map(item => (
+              <button
+                key={item.view}
+                className={`bottom-nav-item ${currentView === item.view ? 'active' : ''}`}
+                onClick={() => onNavigate(item.view)}
+              >
+                <item.icon size={22} />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+        )}
       </div>
     </div>
   );
