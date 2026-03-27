@@ -3,7 +3,8 @@ import {
   Users, CheckCircle, AlertTriangle, FileText, Clock,
   BookOpen, TrendingUp, Send, Plus, CalendarOff, ChevronDown, ChevronUp, Shield
 } from 'lucide-react';
-import { STAFF, LEAVE_REQUESTS, RED_FLAGS, TIME_LOGS, BUDGET_ITEMS } from '../data/mockData';
+import { RED_FLAGS, BUDGET_ITEMS } from '../data/mockData';
+import { GOOGLE_SCRIPT_URL } from '../data/config';
 
 const DASH_T = {
   en: {
@@ -265,20 +266,43 @@ function LogTimeButton({ onNavigate, t }) {
 
 const LEAVE_TYPES = ['Medical', 'Casual', 'Annual', 'Emergency', 'Personal'];
 
-function QuickLeaveRequest({ userName, staffNames, t }) {
+function QuickLeaveRequest({ userName, userKey, staffNames, t }) {
+  const lsKey = `haazimi_quick_leaves_${userKey || userName || 'default'}`;
   const today = new Date().toISOString().split('T')[0];
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ type: 'Casual', from: today, to: today, reason: '', requestFor: 'self' });
+  const [form, setForm] = useState({ type: 'Casual', from: today, to: today, fromTime: '08:00', toTime: '17:00', reason: '', requestFor: 'self' });
   const [pendingList, setPendingList] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('haazimi_quick_leaves') || '[]'); } catch { return []; }
+    try {
+      const ql = JSON.parse(localStorage.getItem(lsKey) || '[]');
+      if (ql.length === 0) return [];
+      const allLeaves = JSON.parse(localStorage.getItem('haazimi_leaves') || '[]');
+      const leaveById = {};
+      allLeaves.forEach(l => { leaveById[String(l.id)] = l; });
+      return ql.map(q => {
+        const match = leaveById[String(q.id)];
+        if (!match) return q;
+        return { ...q, status: match.status || q.status, decidedBy: match.decidedBy || '', decidedAt: match.decidedAt || '', decisionReason: match.decisionReason || '' };
+      });
+    } catch { return []; }
   });
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const calcDays = () => {
-    if (!form.from || !form.to) return 0;
-    const diff = (new Date(form.to) - new Date(form.from)) / 86400000;
-    return Math.max(0, diff + 1);
+  const isPartialDay = form.from === form.to;
+
+  const calcDuration = () => {
+    if (!form.from || !form.to) return '0 days';
+    if (isPartialDay) {
+      const [fh, fm] = (form.fromTime || '08:00').split(':').map(Number);
+      const [th, tm] = (form.toTime || '17:00').split(':').map(Number);
+      const mins = (th * 60 + tm) - (fh * 60 + fm);
+      if (mins <= 0) return '0 hrs';
+      const hrs = mins / 60;
+      return hrs === Math.floor(hrs) ? `${hrs} hr${hrs !== 1 ? 's' : ''}` : `${hrs.toFixed(1)} hrs`;
+    }
+    const diff = Math.round((new Date(form.to) - new Date(form.from)) / 86400000);
+    const days = Math.max(0, diff + 1);
+    return `${days} day${days !== 1 ? 's' : ''}`;
   };
 
   const handleSubmit = (e) => {
@@ -288,7 +312,10 @@ function QuickLeaveRequest({ userName, staffNames, t }) {
       type: form.type,
       from: form.from,
       to: form.to,
-      days: calcDays(),
+      fromTime: isPartialDay ? form.fromTime : null,
+      toTime: isPartialDay ? form.toTime : null,
+      duration: calcDuration(),
+      isHourly: isPartialDay,
       reason: form.reason,
       requestFor: form.requestFor === 'self' ? (userName || 'Self') : form.requestFor,
       status: 'Pending',
@@ -296,9 +323,33 @@ function QuickLeaveRequest({ userName, staffNames, t }) {
     };
     const updated = [entry, ...pendingList];
     setPendingList(updated);
-    localStorage.setItem('haazimi_quick_leaves', JSON.stringify(updated));
+    localStorage.setItem(lsKey, JSON.stringify(updated));
+
+    // Also write to haazimi_leaves so the manager approval queue picks it up
+    const leaveEntry = {
+      id: entry.id,
+      staffName: entry.requestFor,
+      staffEmail: '',
+      type: entry.type,
+      from: entry.from,
+      to: entry.to,
+      days: entry.duration,
+      reason: entry.reason,
+      status: 'Pending',
+      isHourly: entry.isHourly,
+      fromTime: entry.fromTime,
+      toTime: entry.toTime,
+      source: 'local',
+      submittedAt: entry.submittedAt,
+      submittedBy: userName,
+    };
+    try {
+      const allLeaves = JSON.parse(localStorage.getItem('haazimi_leaves') || '[]');
+      localStorage.setItem('haazimi_leaves', JSON.stringify([leaveEntry, ...allLeaves]));
+    } catch {}
+
     setOpen(false);
-    setForm({ type: 'Casual', from: today, to: today, reason: '', requestFor: 'self' });
+    setForm({ type: 'Casual', from: today, to: today, fromTime: '08:00', toTime: '17:00', reason: '', requestFor: 'self' });
   };
 
   return (
@@ -324,6 +375,7 @@ function QuickLeaveRequest({ userName, staffNames, t }) {
         <div className="quick-leave-form">
           <form onSubmit={handleSubmit}>
             <div className="quick-leave-grid">
+              {/* Row 1: Request for | Leave Type */}
               <div className="form-group">
                 <label>{t.requestFor}</label>
                 <select value={form.requestFor} onChange={e => set('requestFor', e.target.value)}>
@@ -337,18 +389,25 @@ function QuickLeaveRequest({ userName, staffNames, t }) {
                   {LEAVE_TYPES.map(lt => <option key={lt}>{lt}</option>)}
                 </select>
               </div>
+
+              {/* Row 2: From (date+time) | Until (date+time) */}
               <div className="form-group">
                 <label>{t.from}</label>
-                <input type="date" value={form.from} min={today} onChange={e => set('from', e.target.value)} required />
+                <input type="date" value={form.from} min={today} onChange={e => { set('from', e.target.value); if (e.target.value > form.to) set('to', e.target.value); }} required style={{ marginBottom: 6 }} />
+                <input type="time" value={form.fromTime} onChange={e => set('fromTime', e.target.value)} style={{ height: 40, width: '100%' }} />
               </div>
               <div className="form-group">
-                <label>{t.to}</label>
-                <input type="date" value={form.to} min={form.from} onChange={e => set('to', e.target.value)} required />
+                <label>Until</label>
+                <input type="date" value={form.to} min={form.from} onChange={e => set('to', e.target.value)} required style={{ marginBottom: 6 }} />
+                <input type="time" value={form.toTime} onChange={e => set('toTime', e.target.value)} style={{ height: 40, width: '100%' }} />
               </div>
-              <div className="form-group quick-leave-days">
+
+              {/* Duration auto-display */}
+              <div className="form-group quick-leave-days" style={{ gridColumn: '1 / -1' }}>
                 <label>{t.duration}</label>
-                <div className="duration-display">{calcDays()} day{calcDays() !== 1 ? 's' : ''}</div>
+                <div className="duration-display">{calcDuration()}</div>
               </div>
+
               <div className="form-group quick-leave-reason">
                 <label>{t.reason} <span style={{ color: '#e74c3c' }}>*</span></label>
                 <textarea
@@ -371,19 +430,44 @@ function QuickLeaveRequest({ userName, staffNames, t }) {
       {/* Persistent pending list */}
       {pendingList.length > 0 && (
         <div style={{ borderTop: '1px solid var(--border-color)', padding: '12px 16px' }}>
-          <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.pendingRequests}</div>
-          {pendingList.map(req => (
-            <div key={req.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
-              <div>
-                <span style={{ fontWeight: 500 }}>{req.type}</span>
-                <span style={{ color: 'var(--text-secondary)', marginLeft: 8 }}>{req.from} → {req.to}</span>
-                {req.requestFor && req.requestFor !== 'Self' && (
-                  <span style={{ color: 'var(--primary-color)', marginLeft: 8, fontSize: '0.78rem' }}>({req.requestFor})</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.pendingRequests}</div>
+            <button
+              onClick={() => { setPendingList([]); localStorage.removeItem(lsKey); }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: '0.75rem', fontWeight: 600, padding: '2px 6px' }}
+            >Clear All</button>
+          </div>
+          {pendingList.map(req => {
+            const sl = String(req.status || '').toLowerCase();
+            const isApproved = sl === 'approved';
+            const isRejected = sl === 'rejected';
+            const badgeBg = isApproved ? '#dcfce7' : isRejected ? '#fee2e2' : '#fff3cd';
+            const badgeFg = isApproved ? '#15803d' : isRejected ? '#b91c1c' : '#856404';
+            return (
+              <div key={req.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontWeight: 500 }}>{req.type}</span>
+                    <span style={{ color: 'var(--text-secondary)', marginLeft: 8 }}>{req.from} → {req.to}</span>
+                    {req.requestFor && req.requestFor !== 'Self' && req.requestFor !== userName && (
+                      <span style={{ color: 'var(--primary-color)', marginLeft: 8, fontSize: '0.78rem' }}>({req.requestFor})</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <span style={{ background: badgeBg, color: badgeFg, borderRadius: 4, padding: '2px 8px', fontSize: '0.75rem', fontWeight: 600 }}>{req.status}</span>
+                    <button onClick={() => { const updated = pendingList.filter(r => r.id !== req.id); setPendingList(updated); localStorage.setItem(lsKey, JSON.stringify(updated)); }}
+                      title="Dismiss" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#aaa', fontSize: '1rem', lineHeight: 1, padding: '0 2px' }}>×</button>
+                  </div>
+                </div>
+                {req.decidedBy && (
+                  <div style={{ fontSize: '0.72rem', color: badgeFg, marginTop: 3 }}>
+                    {isApproved ? '✓' : '✗'} <strong>{req.decidedBy}</strong>{req.decidedAt ? ` · ${req.decidedAt}` : ''}
+                    {req.decisionReason ? ` — "${req.decisionReason}"` : ''}
+                  </div>
                 )}
               </div>
-              <span style={{ background: '#fff3cd', color: '#856404', borderRadius: 4, padding: '2px 8px', fontSize: '0.75rem', fontWeight: 600 }}>{req.status}</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -394,23 +478,41 @@ function ManagerDashboard({ user, onNavigate, language }) {
   const t = DASH_T[language] || DASH_T.en;
   const isAdmin = user.role === 'Admin';
 
-  const totalStaff = STAFF.length;
-  const activeToday = STAFF.filter(s => s.status === 'Active').length;
+  const [realUsers, setRealUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const res = await fetch(`${GOOGLE_SCRIPT_URL}?type=getUsers&t=${Date.now()}`, { mode: 'cors' });
+        const data = await res.json();
+        setRealUsers(Array.isArray(data) ? data : (data.users || []));
+      } catch {
+        // Fallback: check localStorage accounts
+        try {
+          const accounts = JSON.parse(localStorage.getItem('haazimi_accounts') || '[]');
+          setRealUsers(accounts.filter(a => a.status === 'Approved'));
+        } catch {}
+      }
+      setLoadingUsers(false);
+    };
+    fetchUsers();
+  }, []);
+
+  const totalStaff = loadingUsers ? '…' : realUsers.length;
+  const activeToday = loadingUsers ? '…' : realUsers.filter(u => (u.Status || u.status) === 'Approved').length;
+  const pendingLeaves = (() => {
+    try {
+      const leaves = JSON.parse(localStorage.getItem('haazimi_leaves') || '[]');
+      return leaves.filter(l => String(l.status || '').toLowerCase() === 'pending').length;
+    } catch { return 0; }
+  })();
   const redFlags = RED_FLAGS.length;
-  const pendingLeaves = LEAVE_REQUESTS.filter(l => l.status === 'pending').length;
-  const staffNames = STAFF.map(s => s.name);
+  const staffNames = realUsers.map(u => u.Name || u.name).filter(Boolean);
 
   const totalBudgeted = BUDGET_ITEMS.reduce((s, b) => s + b.budgeted, 0);
   const totalSpent = BUDGET_ITEMS.reduce((s, b) => s + b.spent, 0);
   const budgetVariance = totalBudgeted - totalSpent;
-
-  const recentActivity = [
-    { name: 'Usman Tariq', action: 'Submitted leave request', time: '2h ago', status: 'in-progress' },
-    { name: 'Fatima Malik', action: 'Submitted leave request', time: '4h ago', status: 'in-progress' },
-    { name: 'Ahmad Ali', action: 'Leave approved', time: 'Yesterday', status: 'completed' },
-    { name: 'Ibrahim Shah', action: 'Leave rejected', time: 'Yesterday', status: 'incomplete' },
-    { name: 'Bilal Hassan', action: 'Logged 6 hours', time: '2 days ago', status: 'completed' },
-  ];
 
   return (
     <div>
@@ -423,7 +525,7 @@ function ManagerDashboard({ user, onNavigate, language }) {
 
       <div className="dashboard-hero-row">
         <LogTimeButton onNavigate={onNavigate} t={t} />
-        <QuickLeaveRequest userName={user.name} staffNames={staffNames} t={t} />
+        <QuickLeaveRequest userName={user.name} userKey={user.email} staffNames={staffNames} t={t} />
       </div>
 
       <div className="dashboard-grid dashboard-grid--manager">
@@ -487,20 +589,33 @@ function ManagerDashboard({ user, onNavigate, language }) {
 
         <div className="dashboard-section">
           <h3>{t.recentActivity}</h3>
-          <ul className="activity-list">
-            {recentActivity.map((item, i) => (
-              <li key={i} className="activity-item">
-                <div className="activity-details">
-                  <strong>{item.name}</strong>
-                  <span>{item.action}</span>
-                </div>
-                <div className="activity-time">
-                  <span>{item.time}</span>
-                  <span className={`status-badge status-${item.status}`}>{item.status.replace('-', ' ')}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {(() => {
+            try {
+              const reimbs = JSON.parse(localStorage.getItem('haazimi_reimbursements') || '[]');
+              const recentReimbs = reimbs.slice(0, 3).map(r => ({
+                name: r.staffName || 'Staff', action: `Reimbursement request · ${r.purpose || ''}`, time: r.date || '', status: r.status === 'approved' ? 'completed' : r.status === 'rejected' ? 'incomplete' : 'in-progress',
+              }));
+              if (recentReimbs.length > 0) {
+                return (
+                  <ul className="activity-list">
+                    {recentReimbs.map((item, i) => (
+                      <li key={i} className="activity-item">
+                        <div className="activity-details">
+                          <strong>{item.name}</strong>
+                          <span>{item.action}</span>
+                        </div>
+                        <div className="activity-time">
+                          <span>{item.time}</span>
+                          <span className={`status-badge status-${item.status}`}>{item.status.replace('-', ' ')}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                );
+              }
+            } catch {}
+            return <div style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', padding: '12px 0' }}>No recent activity yet.</div>;
+          })()}
         </div>
       </div>
     </div>
@@ -513,15 +628,26 @@ function StaffDashboard({ user, onNavigate, language }) {
   const [aiResponse, setAiResponse] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const today = new Date().toLocaleDateString('en-PK', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const myLogs = TIME_LOGS.slice(0, 3);
-  const totalHours = TIME_LOGS.reduce((s, l) => s + l.hours, 0);
+
+  const myLogs = (() => {
+    try {
+      const all = JSON.parse(localStorage.getItem(`haazimi_timelogs_${user.email}`) || '[]');
+      return all.slice(0, 3);
+    } catch { return []; }
+  })();
+  const totalHours = (() => {
+    try {
+      const all = JSON.parse(localStorage.getItem(`haazimi_timelogs_${user.email}`) || '[]');
+      return all.reduce((s, l) => s + (l.hours || 0), 0);
+    } catch { return 0; }
+  })();
 
   const handleAsk = async () => {
     if (!aiInput.trim()) return;
     setAiLoading(true);
     setAiResponse('');
     await new Promise(r => setTimeout(r, 1200));
-    setAiResponse(`Based on your records, you have logged ${totalHours} hours this month across ${TIME_LOGS.length} sessions. Your class attendance average is 88%. You have 3 students that need attention. Keep up the great work!`);
+    setAiResponse(`Based on your records, you have logged ${totalHours} hours this month across ${myLogs.length} sessions. Keep up the great work!`);
     setAiLoading(false);
   };
 
@@ -536,7 +662,7 @@ function StaffDashboard({ user, onNavigate, language }) {
 
       <div className="dashboard-hero-row">
         <LogTimeButton onNavigate={onNavigate} t={t} />
-        <QuickLeaveRequest userName={user.name} staffNames={[]} t={t} />
+        <QuickLeaveRequest userName={user.name} userKey={user.email} staffNames={[]} t={t} />
       </div>
 
       <div className="dashboard-grid">
