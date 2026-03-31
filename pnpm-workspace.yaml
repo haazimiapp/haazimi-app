@@ -1,9 +1,0 @@
-packages:
-  - '.'
-
-catalogs:
-  default:
-    '@replit/vite-plugin-cartographer': 'latest'
-    'vite': 'latest'
-    'react': 'latest'
-    'react-dom': 'latest'
