@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Eye, EyeOff, Sun, Moon, Globe } from 'lucide-react';
 import { COUNTRY_CENTRES, GOOGLE_SCRIPT_URL } from '../data/config';
+import logo from '../assets/Logo.png';
 
 const LANGS = [
   { code: 'en', label: 'English' },
@@ -114,7 +115,6 @@ export default function LoginPage({ onLogin, onRegister, onDevLogin, theme, onTo
     <div className="login-page-container">
       <div className="login-form-container">
 
-        {/* Icons row inside the card */}
         <div className="login-card-actions">
           <div className="language-switcher" style={{ position: 'relative' }}>
             <button className="language-switcher-button" onClick={() => setLangOpen(o => !o)} title="Language">
@@ -140,7 +140,7 @@ export default function LoginPage({ onLogin, onRegister, onDevLogin, theme, onTo
         </div>
 
         <div className="login-branding">
-          <h1>{t.title}</h1>
+          <img src={logo} alt="Madrassa Haazimi" className="login-logo" />
         </div>
 
         <div className="login-intro">
