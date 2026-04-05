@@ -174,8 +174,8 @@ body {
 
 .login-logo {
     width: auto;
-    height: clamp(80px, 12vw, 140px);
-    max-width: 105%;
+    height: clamp(100px, 12vw, 140px);
+    max-width: 100%;
     display: block;
     margin: 0 auto;
     object-fit: contain;
