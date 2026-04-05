@@ -74,10 +74,10 @@ export const CLASSES = [
 ];
 
 export const EVENTS = [
-  { date: '2026-03-17', type: 'holiday', name: 'Pakistan Day Holiday', desc: 'Public holiday' },
-  { date: '2026-03-20', type: 'monthly-muzaakarah', name: 'Monthly Muzaakarah', desc: 'All staff required to attend' },
-  { date: '2026-03-25', type: 'exam', name: 'Hifz Assessment', desc: 'Monthly juz assessment for all hifz students' },
-  { date: '2026-03-28', type: 'jalsah', name: 'Annual Jalsah', desc: 'Annual gathering and awards ceremony' },
+  { date: '2026-05-27', type: 'holiday', name: 'Eidul Adh'haa Holiday', desc: 'Public holiday' },
+  { date: '2026-04-11', type: 'monthly-muzaakarah', name: 'Monthly Muzaakarah', desc: 'All staff required to attend' },
+  { date: '2026-05-04', type: 'exam', name: 'Mid Year Exams', desc: 'Mid Year Exams for all students' },
+  { date: '2026-05-25', type: 'holiday', name: 'Mid Year Holidays', desc: 'Mid Year Holidays begins' },
   { date: '2026-04-05', type: 'event', name: 'Guest Scholar Visit', desc: 'Sheikh AbdulHaq Al-Farsi visiting' },
   { date: '2026-04-10', type: 'holiday', name: 'Eid-ul-Fitr', desc: 'Eid holiday — institute closed 3 days' },
 ];
