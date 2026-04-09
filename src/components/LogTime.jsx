@@ -132,7 +132,18 @@ export default function LogTime({ user, language }) {
     } catch { return INITIAL_LOGS; }
   });
 
-  const blankForm = { date: new Date().toISOString().split('T')[0], checkIn: '08:00', checkOut: '14:00', activity: 'Teaching', studentCount: '', otherActivity: '', notes: '', absentCount: '', absentNames: '' };
+  const blankForm = {
+    date: new Date().toISOString().split('T')[0],
+    checkIn: '08:00',
+    checkOut: '14:00',
+    activity: 'Teaching',
+    studentCount: '',
+    otherActivity: '',
+    notes: '',
+    absentCount: '',
+    absentNames: ''
+  };
+
   const [form, setForm] = useState(blankForm);
   const [editingId, setEditingId] = useState(null);
   const [submitted, setSubmitted] = useState(false);
@@ -149,23 +160,53 @@ export default function LogTime({ user, language }) {
   const attemptSync = async () => {
     const queue = JSON.parse(localStorage.getItem('haazimi_offline_logs') || '[]');
     if (queue.length === 0) return;
+
     setSyncStatus('syncing');
     const newQueue = [...queue];
-    const activeUser = (() => { try { return JSON.parse(localStorage.getItem('haazimi_user') || '{}'); } catch { return {}; } })();
+    const activeUser = (() => {
+      try { return JSON.parse(localStorage.getItem('haazimi_user') || '{}'); }
+      catch { return {}; }
+    })();
+
     for (let i = 0; i < newQueue.length; i++) {
       try {
+        const item = newQueue[i];
         await fetch(GOOGLE_SCRIPT_URL, {
-          method: 'POST', mode: 'no-cors',
+          method: 'POST',
+          mode: 'no-cors',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...newQueue[i], teacherName: activeUser.name || 'Unknown' }),
+          body: JSON.stringify({
+            type: 'attendance',
+            requestId: item.id || Date.now(),
+            workDate: item.date,
+            checkIn: item.checkIn,
+            checkOut: item.checkOut,
+            activity: item.activity,
+            hours: item.hours,
+            notes: item.notes || '',
+            teacherName: activeUser.name || item.teacherName || 'Unknown',
+            email: activeUser.email || item.teacherEmail || '',
+            status: item.status || 'Pending',
+            studentCount: item.studentCount || '',
+            otherActivity: item.otherActivity || '',
+            absentCount: item.absentCount || '',
+            absentNames: item.absentNames || '',
+            students: item.absentNames || '',
+          }),
         });
-        newQueue.splice(i, 1); i--;
-      } catch { setSyncStatus('offline'); break; }
+        newQueue.splice(i, 1);
+        i--;
+      } catch {
+        setSyncStatus('offline');
+        break;
+      }
     }
+
     localStorage.setItem('haazimi_offline_logs', JSON.stringify(newQueue));
     if (newQueue.length === 0) {
       const ts = new Date().toLocaleTimeString();
-      setSyncStatus('synced'); setLastSynced(ts);
+      setSyncStatus('synced');
+      setLastSynced(ts);
       localStorage.setItem('haazimi_last_synced', ts);
       setTimeout(() => setSyncStatus('idle'), 3000);
     }
@@ -185,6 +226,7 @@ export default function LogTime({ user, language }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const hours = parseFloat(calcHours());
+
     if (editingId) {
       setLogs(prev => {
         const updated = prev.map(l => l.id === editingId ? { ...l, ...form, hours, absentCount: form.absentCount, absentNames: form.absentNames } : l);
@@ -194,12 +236,17 @@ export default function LogTime({ user, language }) {
       setEditingId(null);
     } else {
       const newLog = { id: Date.now(), ...form, hours, status: 'pending' };
-      setLogs(prev => { const updated = [newLog, ...prev]; localStorage.setItem('haazimi_display_logs', JSON.stringify(updated)); return updated; });
+      setLogs(prev => {
+        const updated = [newLog, ...prev];
+        localStorage.setItem('haazimi_display_logs', JSON.stringify(updated));
+        return updated;
+      });
       const queue = JSON.parse(localStorage.getItem('haazimi_offline_logs') || '[]');
       queue.push(newLog);
       localStorage.setItem('haazimi_offline_logs', JSON.stringify(queue));
       attemptSync();
     }
+
     setSubmitted(true);
     setTimeout(() => setSubmitted(false), 3000);
     setForm(blankForm);
@@ -208,18 +255,43 @@ export default function LogTime({ user, language }) {
 
   const handleEdit = (log) => {
     setEditingId(log.id);
-    setForm({ date: log.date, checkIn: log.checkIn || '08:00', checkOut: log.checkOut || '14:00', activity: log.activity || 'Teaching', studentCount: log.studentCount || '', otherActivity: log.otherActivity || '', notes: log.notes || '', absentCount: log.absentCount || '', absentNames: log.absentNames || '' });
+    setForm({
+      date: log.date,
+      checkIn: log.checkIn || '08:00',
+      checkOut: log.checkOut || '14:00',
+      activity: log.activity || 'Teaching',
+      studentCount: log.studentCount || '',
+      otherActivity: log.otherActivity || '',
+      notes: log.notes || '',
+      absentCount: log.absentCount || '',
+      absentNames: log.absentNames || ''
+    });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDelete = (id) => {
     if (!window.confirm('Delete this time log entry?')) return;
-    setLogs(prev => { const updated = prev.filter(l => l.id !== id); localStorage.setItem('haazimi_display_logs', JSON.stringify(updated)); return updated; });
+    setLogs(prev => {
+      const updated = prev.filter(l => l.id !== id);
+      localStorage.setItem('haazimi_display_logs', JSON.stringify(updated));
+      return updated;
+    });
   };
 
-  const handleCancelEdit = () => { setEditingId(null); setForm(blankForm); setSelectedAbsent(new Set()); };
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setForm(blankForm);
+    setSelectedAbsent(new Set());
+  };
 
-  const handleActivityChange = (e) => { set('activity', e.target.value); set('studentCount', ''); set('otherActivity', ''); set('absentCount', ''); set('absentNames', ''); setSelectedAbsent(new Set()); };
+  const handleActivityChange = (e) => {
+    set('activity', e.target.value);
+    set('studentCount', '');
+    set('otherActivity', '');
+    set('absentCount', '');
+    set('absentNames', '');
+    setSelectedAbsent(new Set());
+  };
 
   const toggleAbsent = (id) => {
     setSelectedAbsent(prev => {
@@ -231,6 +303,7 @@ export default function LogTime({ user, language }) {
       return next;
     });
   };
+
   const totalHours = logs.reduce((s, l) => s + (parseFloat(l.hours) || 0), 0);
 
   const getThisWeekLogs = () => {
@@ -313,8 +386,6 @@ export default function LogTime({ user, language }) {
 
             <form className="generic-form" onSubmit={handleSubmit}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-                {/* Row 1: Date | Activity */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div className="form-group" style={{ margin: 0 }}>
                     <label>{t.date}</label>
@@ -330,7 +401,6 @@ export default function LogTime({ user, language }) {
                   </div>
                 </div>
 
-                {/* Other: specify field (full width) */}
                 {isOther && (
                   <div className="form-group" style={{ margin: 0 }}>
                     <label>{t.specify} <span style={{ color: '#e74c3c' }}>*</span></label>
@@ -338,7 +408,6 @@ export default function LogTime({ user, language }) {
                   </div>
                 )}
 
-                {/* Row 2: Check In | Check Out */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div className="form-group" style={{ margin: 0 }}>
                     <label>{t.checkIn}</label>
@@ -350,7 +419,6 @@ export default function LogTime({ user, language }) {
                   </div>
                 </div>
 
-                {/* Row 3: Number of Students | Duration (or Duration alone) */}
                 <div style={{ display: 'grid', gridTemplateColumns: isTeaching ? '1fr 1fr' : '1fr', gap: 12 }}>
                   {isTeaching && (
                     <div className="form-group" style={{ margin: 0 }}>
@@ -364,7 +432,6 @@ export default function LogTime({ user, language }) {
                   </div>
                 </div>
 
-                {/* Students Absent (Teaching only) */}
                 {isTeaching && (
                   <div style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -411,13 +478,12 @@ export default function LogTime({ user, language }) {
                   </div>
                 )}
 
-                {/* Row 4: Notes (full width) */}
                 <div className="form-group" style={{ margin: 0 }}>
                   <label>{t.notes}</label>
                   <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={3} />
                 </div>
-
               </div>
+
               <div className="form-actions">
                 <button type="submit" className="button-primary">{editingId ? t.updateEntry : t.logBtn}</button>
                 {editingId && <button type="button" className="button-secondary" onClick={handleCancelEdit}>{t.cancelEdit}</button>}
@@ -444,6 +510,7 @@ export default function LogTime({ user, language }) {
               </button>
             </div>
           </div>
+
           <div style={{ overflowX: 'auto' }}>
             <table className="staff-table" style={{ minWidth: 480 }}>
               <thead>
