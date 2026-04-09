@@ -285,7 +285,25 @@ export default function Calendar({ user, language }) {
   const isRTL = language === 'ar' || language === 'ur';
 
   const meta = getUserMeta(user);
+useEffect(() => {
+  const loadSatSetting = async () => {
+    try {
+      const res = await fetch(`${GOOGLE_SCRIPT_URL}?type=getSettings&t=${Date.now()}`, { mode: 'cors' });
+      const allSettings = await res.json();
+      const centreKey = meta.centre || '';
+      const centreSettings = allSettings[centreKey] || {};
+      setShowSat(Boolean(centreSettings.showSat));
+    } catch {
+      try {
+        const centreKey = meta.centre || 'default';
+        const saved = localStorage.getItem(`haazimi_show_sat_${centreKey}`);
+        setShowSat(saved === 'true');
+      } catch {}
+    }
+  };
 
+  loadSatSetting();
+}, [meta.centre]);
   const EVENT_LABELS = {
     holiday: t.holiday, event: t.event, exam: t.exam,
     'monthly-muzaakarah': t.muzaakarah, jalsah: t.jalsah, other: t.other,
@@ -297,7 +315,7 @@ export default function Calendar({ user, language }) {
   const [filter, setFilter] = useState('all');
   const [filterOpen, setFilterOpen] = useState(false);
   const [tooltip, setTooltip] = useState(null);
-  const [showSat, setShowSat] = useState(() => {
+  const [showSat, setShowSat] = useState(false);
     try {
       const centreKey = meta.centre || 'default';
       const saved = localStorage.getItem(`haazimi_show_sat_${centreKey}`);
@@ -322,6 +340,27 @@ export default function Calendar({ user, language }) {
 
   const [sheetEvents, setSheetEvents] = useState(() => {
     try {
+      const handleSatToggle = async (checked) => {
+  setShowSat(checked);
+
+  try {
+    localStorage.setItem(`haazimi_show_sat_${meta.centre || 'default'}`, String(checked));
+  } catch {}
+
+  try {
+    await fetch(GOOGLE_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'updateSetting',
+        centre: meta.centre || '',
+        feature: 'showSat',
+        enabled: checked,
+      }),
+    });
+  } catch {}
+};
       const cached = localStorage.getItem(calCacheKey);
       if (cached) return JSON.parse(cached);
     } catch {}
@@ -488,16 +527,14 @@ export default function Calendar({ user, language }) {
       setSyncStatus('syncing');
       try {
         await fetch(GOOGLE_SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors', // Use no-cors to avoid the redirect crash
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ 
-            action: 'updateCalendarEvent', // Changed from 'type' to 'action'
-            id: editingEventId, 
-            ...editForm 
-          }),
-        });
-
+  method: 'POST',
+  mode: 'no-cors',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    action: 'addCalendarEvent',
+    ...ev,
+  }),
+});
         // Update the local state immediately so the UI reflects the change
         setSheetEvents(prev => prev.map(ev =>
           ev.id === editingEventId ? { ...ev, ...editForm } : ev
@@ -923,19 +960,14 @@ export default function Calendar({ user, language }) {
             </div>
             {(meta.isSuperAdmin || meta.isCountryAdmin || meta.isCentreManager) && (
               <div className="saturday-toggle">
-                <span>{t.satClass}</span>
-                <input type="checkbox" checked={showSat} onChange={e => {
-                  const val = e.target.checked;
-                  const centreKey = meta.centre || 'default';
-                  setShowSat(val);
-                  localStorage.setItem(`haazimi_show_sat_${centreKey}`, val ? 'true' : 'false');
-                  fetch(GOOGLE_SCRIPT_URL, {
-                    method: 'POST', mode: 'no-cors',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ type: 'updateSetting', centre: meta.centre || '', key: 'saturdays_as_class', value: val }),
-                  }).catch(() => {});
-                }} style={{ accentColor: 'var(--accent-color)' }} />
-              </div>
+  <span>{t.satClass}</span>
+  <input
+    type="checkbox"
+    checked={showSat}
+    onChange={(e) => handleSatToggle(e.target.checked)}
+    style={{ accentColor: 'var(--accent-color)' }}
+  />
+</div>
             )}
             {(meta.isSuperAdmin || meta.isCountryAdmin || meta.isCentreManager) && (
               <div className="hijri-sync-control">
