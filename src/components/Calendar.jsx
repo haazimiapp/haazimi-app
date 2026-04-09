@@ -285,25 +285,7 @@ export default function Calendar({ user, language }) {
   const isRTL = language === 'ar' || language === 'ur';
 
   const meta = getUserMeta(user);
-useEffect(() => {
-  const loadSatSetting = async () => {
-    try {
-      const res = await fetch(`${GOOGLE_SCRIPT_URL}?type=getSettings&t=${Date.now()}`, { mode: 'cors' });
-      const allSettings = await res.json();
-      const centreKey = meta.centre || '';
-      const centreSettings = allSettings[centreKey] || {};
-      setShowSat(Boolean(centreSettings.showSat));
-    } catch {
-      try {
-        const centreKey = meta.centre || 'default';
-        const saved = localStorage.getItem(`haazimi_show_sat_${centreKey}`);
-        setShowSat(saved === 'true');
-      } catch {}
-    }
-  };
 
-  loadSatSetting();
-}, [meta.centre]);
   const EVENT_LABELS = {
     holiday: t.holiday, event: t.event, exam: t.exam,
     'monthly-muzaakarah': t.muzaakarah, jalsah: t.jalsah, other: t.other,
@@ -316,12 +298,6 @@ useEffect(() => {
   const [filterOpen, setFilterOpen] = useState(false);
   const [tooltip, setTooltip] = useState(null);
   const [showSat, setShowSat] = useState(false);
-    try {
-      const centreKey = meta.centre || 'default';
-      const saved = localStorage.getItem(`haazimi_show_sat_${centreKey}`);
-      return saved === 'true';
-    } catch { return false; }
-  });
   const [hijriOffset, setHijriOffset] = useState(0);
 
   const calCacheKey = `haazimi_cal_events_${meta.centre || meta.country || 'global'}`;
@@ -340,27 +316,6 @@ useEffect(() => {
 
   const [sheetEvents, setSheetEvents] = useState(() => {
     try {
-      const handleSatToggle = async (checked) => {
-  setShowSat(checked);
-
-  try {
-    localStorage.setItem(`haazimi_show_sat_${meta.centre || 'default'}`, String(checked));
-  } catch {}
-
-  try {
-    await fetch(GOOGLE_SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({
-        action: 'updateSetting',
-        centre: meta.centre || '',
-        feature: 'showSat',
-        enabled: checked,
-      }),
-    });
-  } catch {}
-};
       const cached = localStorage.getItem(calCacheKey);
       if (cached) return JSON.parse(cached);
     } catch {}
@@ -379,6 +334,26 @@ useEffect(() => {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkForm, setBulkForm] = useState({ name: '', type: 'holiday', fromDate: '', toDate: '' });
   const [bulkStatus, setBulkStatus] = useState('idle');
+
+  useEffect(() => {
+    const loadSatSetting = async () => {
+      try {
+        const res = await fetch(`${GOOGLE_SCRIPT_URL}?type=getSettings&t=${Date.now()}`, { mode: 'cors' });
+        const allSettings = await res.json();
+        const centreKey = meta.centre || '';
+        const centreSettings = allSettings[centreKey] || {};
+        setShowSat(Boolean(centreSettings.showSat));
+      } catch {
+        try {
+          const centreKey = meta.centre || 'default';
+          const saved = localStorage.getItem(`haazimi_show_sat_${centreKey}`);
+          setShowSat(saved === 'true');
+        } catch {}
+      }
+    };
+
+    loadSatSetting();
+  }, [meta.centre]);
 
   const fetchSheetEvents = useCallback(async () => {
     setSyncStatus('syncing');
@@ -463,9 +438,9 @@ useEffect(() => {
       id,
       date: newEvent.date,
       name: newEvent.name,
-      type: newEvent.type, // 'event' or 'holiday'
+      type: newEvent.type,
       desc: newEvent.desc || '',
-      scope: scope,
+      scope,
       country: meta.country || '',
       centre: meta.centre || '',
       addedBy: meta.name || '',
@@ -476,30 +451,21 @@ useEffect(() => {
     setSyncStatus('syncing');
 
     try {
-      // Back to no-cors! This prevents the Google redirect crash.
       await fetch(GOOGLE_SCRIPT_URL, {
         method: 'POST',
-        mode: 'no-cors', 
+        mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ 
-          ...ev, 
-          action: 'addCalendarEvent' // Keeps the backend happy
+        body: JSON.stringify({
+          action: 'addCalendarEvent',
+          ...ev,
         }),
       });
 
-      // 1. Add to the local calendar instantly
       setSheetEvents(prev => [...prev, { ...ev, source: 'sheet' }]);
-
-      // 2. Mark as done
       setSyncStatus('done');
-
-      // 3. Close the modal (Using your original state variables)
       setShowDayAddForm(false);
       if (typeof setAddingEvent === 'function') setAddingEvent(null);
-
-      // 4. Reset the form inputs
       setNewEvent({ date: selectedDate || '', name: '', type: 'event', desc: '', notify: false });
-
     } catch (err) {
       console.error("Network Error:", err);
       setSyncStatus('fail');
@@ -527,15 +493,16 @@ useEffect(() => {
       setSyncStatus('syncing');
       try {
         await fetch(GOOGLE_SCRIPT_URL, {
-  method: 'POST',
-  mode: 'no-cors',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    action: 'addCalendarEvent',
-    ...ev,
-  }),
-});
-        // Update the local state immediately so the UI reflects the change
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({
+            action: 'updateCalendarEvent',
+            id: editingEventId,
+            ...editForm
+          }),
+        });
+
         setSheetEvents(prev => prev.map(ev =>
           ev.id === editingEventId ? { ...ev, ...editForm } : ev
         ));
@@ -547,7 +514,6 @@ useEffect(() => {
       }
     }
 
-    // Close the editor and reset the form
     setEditingEventId(null);
     setEditForm({});
   };
@@ -559,24 +525,49 @@ useEffect(() => {
     const from = new Date(bulkForm.fromDate);
     const to = new Date(bulkForm.toDate);
     if (to < from) { setBulkStatus('idle'); return; }
+
     const dates = [];
     for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
       dates.push(new Date(d).toISOString().slice(0, 10));
     }
+
     const newEvents = [];
     for (const dateStr of dates) {
       const id = `bulk-${dateStr}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const ev = { id, date: dateStr, name: bulkForm.name, type: bulkForm.type, desc: '', scope: defaultScope, country: meta.country || '', centre: meta.centre || '', addedBy: user?.name || '' };
+      const ev = {
+        id,
+        date: dateStr,
+        name: bulkForm.name,
+        type: bulkForm.type,
+        desc: '',
+        scope: defaultScope,
+        country: meta.country || '',
+        centre: meta.centre || '',
+        addedBy: user?.name || ''
+      };
       newEvents.push(ev);
       if (meta.canWriteSheet && GOOGLE_SCRIPT_URL) {
         try {
-          await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'addEvent', event: ev }) });
-        } catch { }
+          await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'addCalendarEvent',
+              ...ev,
+            }),
+          });
+        } catch {}
       }
     }
+
     setSheetEvents(prev => [...prev, ...newEvents]);
     setBulkStatus('done');
-    setTimeout(() => { setBulkOpen(false); setBulkForm({ name: '', type: 'holiday', fromDate: '', toDate: '' }); setBulkStatus('idle'); }, 1500);
+    setTimeout(() => {
+      setBulkOpen(false);
+      setBulkForm({ name: '', type: 'holiday', fromDate: '', toDate: '' });
+      setBulkStatus('idle');
+    }, 1500);
   };
 
   const handleDeleteEvent = async (ev) => {
@@ -602,6 +593,27 @@ useEffect(() => {
     } catch {
       setSyncStatus('fail');
     }
+  };
+
+  const handleSatToggle = async (checked) => {
+    setShowSat(checked);
+    try {
+      localStorage.setItem(`haazimi_show_sat_${meta.centre || 'default'}`, String(checked));
+    } catch {}
+
+    try {
+      await fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({
+          action: 'updateSetting',
+          centre: meta.centre || '',
+          feature: 'showSat',
+          enabled: checked,
+        }),
+      });
+    } catch {}
   };
 
   const cells = [];
@@ -960,14 +972,14 @@ useEffect(() => {
             </div>
             {(meta.isSuperAdmin || meta.isCountryAdmin || meta.isCentreManager) && (
               <div className="saturday-toggle">
-  <span>{t.satClass}</span>
-  <input
-    type="checkbox"
-    checked={showSat}
-    onChange={(e) => handleSatToggle(e.target.checked)}
-    style={{ accentColor: 'var(--accent-color)' }}
-  />
-</div>
+                <span>{t.satClass}</span>
+                <input
+                  type="checkbox"
+                  checked={showSat}
+                  onChange={(e) => handleSatToggle(e.target.checked)}
+                  style={{ accentColor: 'var(--accent-color)' }}
+                />
+              </div>
             )}
             {(meta.isSuperAdmin || meta.isCountryAdmin || meta.isCentreManager) && (
               <div className="hijri-sync-control">
